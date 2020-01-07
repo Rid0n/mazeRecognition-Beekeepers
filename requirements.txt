@@ -1,0 +1,6 @@
+Necessary packages
+opencv-python==3.4.3.18 argparse
+
+using 
+
+pip install opencv-python==3.4.3.18 argparse
