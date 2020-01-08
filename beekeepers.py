@@ -1,36 +1,44 @@
 import cv2
 import numpy as np
 import argparse
-
+from collections import Counter
 size = (17,17) # размер лабиринта
 
 
 def cornering(img):
-    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    bi = cv2.bilateralFilter(gray, 5, 75, 75)
-    cv2.imshow('bi',bi)
-    dst = cv2.cornerHarris(bi, 2, 3, 0.04)#ищем углы по Харрису
-    dst = cv2.dilate(dst,None)
-    # ret, dst = cv2.threshold(dst,0.01*dst.max(),255,0)
-    mask = np.zeros_like(gray)
-#--- applying a threshold and turning those pixels above the threshold to white ---
-    mask[dst>0.01*dst.max()] = 255
+    img = cv2.bilateralFilter(img,10,17,17)
+    hsv = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+
+    thresh = cv2.inRange(hsv, np.array((38,0,0)), np.array((255,255,255)))
+    mask = 255 - thresh
+    eroder = np.ones((5, 5), np.uint8)
+    mask = cv2.erode(mask, eroder, iterations=1)
+
+    dst = cv2.cornerHarris(mask, 2, 3, 0.04)  # ищем углы по Харрису
+    dst = cv2.dilate(dst, None)
+    ret, dst = cv2.threshold(dst, 0.01 * dst.max(), 255, 0)
+    mask = np.zeros_like(hsv)
+    mask[dst > 0.01 * dst.max()] = 255
+    mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
 
     coor = np.argwhere(mask) #
 
     coor = np.flip(coor)
     corners = np.zeros((4, 2), dtype="float32")
+
     s = np.float32(coor).sum(axis=1)
     corners[0]=coor[np.argmin(s)]
     corners[3]=coor[np.argmax(s)]           # ищем углы лабиринта
     d = np.diff(np.float32(coor),axis=1)
     corners[2]=coor[np.argmin(d)]
     corners[1]=coor[np.argmax(d)]
+    # img2 = img.copy()
+    # for pt in corners:
+    #     cv2.circle(img2, tuple((pt)), 3, (0, 0, 255), -1)  # посмотреть, что углы верно определились
+    # cv2.imshow('io',img2)
+    # cv2.waitKey(10000)
     return corners
-# img2 = img.copy()
-# for pt in corners:
-#     cv2.circle(img2, tuple((pt)), 3, (0, 0, 255), -1)  # посмотреть, что углы верно определились
-# cv2.imshow('io',img2)
+
 def persp_transf(corners):
     pts1 = corners
     pts2 = np.float32([[0,0],[20*size[0],0],[0,20*size[1]],[20*size[0],20*size[1]]])
@@ -39,38 +47,41 @@ def persp_transf(corners):
     # приведение перспективы
     return result
 
-def getting_pretty(res):
-    gray = cv2.cvtColor(res,cv2.COLOR_BGR2GRAY)
-    mask = np.zeros_like(gray)
-    cv2.imshow('vs',gray)
-    im_bw = np.flip(gray,1)
-
-    im_bw = np.rot90(im_bw)
-    return im_bw
 
 #cv2.imshow('v',im_bw)
+def weedOutTheGreens(img):
+    filt_img = cv2.bilateralFilter(img, 10, 17, 17)
+    hsv = cv2.cvtColor(filt_img, cv2.COLOR_BGR2HSV)
+    sh, ss, sv = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    ch, cs, cv = Counter(sh.flat), Counter(ss.flat), Counter(sv.flat)
 
-def thresh(im_bw):
-    thresh = 160
-    im_bw = cv2.threshold(im_bw, thresh, 255, cv2.THRESH_BINARY)[1]
-    # blur = cv2.GaussianBlur(im_bw,(5,5),0)
-    # im_bw = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
-    return im_bw
+    c = [ch,cs,cv]
+    #по наиболее часто встречающемуся цвету выделяем лабиринт
+    b = [None] * 3
+
+    for j in range(3):
+        for i in range(len(c[j]) - 1):
+            b[j] = (c[j].most_common(i + 1))[-1][0]
+            if b[j] != 0 :
+                break
+
+    res = cv2.inRange(hsv, np.array((b[0] - 5, b[1] - 5, b[2] - 5)),np.array((b[0] + 5, b[1] + 5, b[2] + 5)))
+
+    im = np.flip(res, 1)
+    im = np.rot90(im)
+
+    return im
 
 
-#cv2.imshow('s',im_bw)  #ЧБ большая
 
+def reSize(im):
+    im = cv2.resize(im, size, interpolation=cv2.INTER_BITS)
+    return im# сводим размер к желаемому
 
-
-def reSize(im_bw):
-    im_bw = cv2.resize(im_bw, size, interpolation=cv2.INTER_BITS)
-    return im_bw# сводим размер к желаемому
-#cv2.imshow('p',im_bw)
-def bitify(im_bw):
-    im_bw = np.where(im_bw > 150, 1, 0)
-    nim = np.array(im_bw)
-    #print(nim.size)
-    h,w=im_bw.shape
+def bitify(im):
+    im = np.where(im > 150, 1, 0)
+    nim = np.array(im)
+    h,w=im.shape
 # Print that puppy out
     for r in range(h):
         for c in range(w):
@@ -80,11 +91,11 @@ def bitify(im_bw):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('img', type=str, help="Image to matrify")
+    parser.add_argument('image', type=str, help="Image to Bi-matrify")
     args = parser.parse_args()
-    img = cv2.imread(args.img)
+    img = cv2.imread(args.image)
     corn = cornering(img)
     trans = persp_transf(corn)
-    hi = thresh(getting_pretty(trans))
+    hi = weedOutTheGreens(trans)
     gutSize = reSize(hi)
     bitify(gutSize)
