@@ -11,8 +11,8 @@ python beekeepers.py <Image.jpg>
 
 Зависимости:
 
-opencv-python==3.4.3.18 argparse
+opencv-python==3.4.3.18 argparse numpy
 
 Установка:
 
-pip install opencv-python==3.4.3.18 argparse
+pip install opencv-python==3.4.3.18 argparse numpy
