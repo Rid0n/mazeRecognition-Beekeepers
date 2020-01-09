@@ -1,6 +1,6 @@
 Necessary packages
-opencv-python==3.4.3.18 argparse
+opencv-python==3.4.3.18 argparse numpy
 
 using 
 
-pip install opencv-python==3.4.3.18 argparse
+pip install opencv-python==3.4.3.18 argparse numpy
